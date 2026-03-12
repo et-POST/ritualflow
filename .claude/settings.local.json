@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__0ad7e54a-ddbc-4874-a237-796c8ddbba63__notion-update-page",
+      "Bash(pip install -r requirements.txt)",
+      "mcp__0ad7e54a-ddbc-4874-a237-796c8ddbba63__notion-create-database",
+      "mcp__0ad7e54a-ddbc-4874-a237-796c8ddbba63__notion-create-pages",
+      "Bash(python -c \"from notion_client import Client; c = Client\\(auth=''test''\\); print\\(dir\\(c.data_sources\\)\\)\")",
+      "Bash(python -c \"from notion_client import Client; help\\(Client.data_sources.fget\\(Client.__new__\\(Client\\)\\).query\\)\")",
+      "Bash(python -c \":*)",
+      "Bash(python -m ritualflow run --frequency daily)",
+      "Bash(export PATH=\"$PATH:/c/Users/epost/AppData/Roaming/Claude/claude-code/2.1.63\")"
+    ]
+  }
+}

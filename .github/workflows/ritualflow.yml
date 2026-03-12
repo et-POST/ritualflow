@@ -1,0 +1,64 @@
+name: RitualFlow — Habit Automation
+
+on:
+  schedule:
+    # Daily at 8:00 AM UTC (adjust to your timezone)
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+    inputs:
+      frequency:
+        description: 'Habit frequency to run'
+        required: false
+        type: choice
+        options:
+          - ''
+          - daily
+          - weekly
+          - monthly
+
+jobs:
+  run-habits:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Determine frequency
+        id: freq
+        run: |
+          # Manual dispatch: use input
+          if [ -n "${{ github.event.inputs.frequency }}" ]; then
+            echo "frequency=${{ github.event.inputs.frequency }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Scheduled: determine what to run based on the current date
+          DAY_OF_WEEK=$(date +%u)  # 1=Monday
+          DAY_OF_MONTH=$(date +%d)
+          FREQ_ARGS="--frequency daily"
+
+          if [ "$DAY_OF_WEEK" = "1" ]; then
+            FREQ_ARGS=""  # Monday: run all frequencies
+          elif [ "$DAY_OF_MONTH" = "01" ]; then
+            FREQ_ARGS=""  # First of month: run all frequencies
+          fi
+
+          echo "frequency=$FREQ_ARGS" >> "$GITHUB_OUTPUT"
+
+      - name: Run RitualFlow
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RITUALFLOW_DB_ID: ${{ secrets.RITUALFLOW_DB_ID }}
+          RITUALFLOW_OUTPUT_PAGE_ID: ${{ secrets.RITUALFLOW_OUTPUT_PAGE_ID }}
+        run: |
+          python -m ritualflow.cli run ${{ steps.freq.outputs.frequency }}

@@ -1,0 +1,328 @@
+"""Write generated content as Notion pages in the Generated database."""
+
+from datetime import date
+
+from notion_client import Client
+
+from ritualflow.config import (
+    NOTION_TOKEN,
+    RITUALFLOW_GENERATED_DB_ID,
+)
+from ritualflow.habits import Habit
+from ritualflow.utils import make_habit_key, format_date_for_notion
+
+# Notion API hard limit for children blocks per request
+NOTION_BLOCK_LIMIT = 100
+
+MONTHS_FR = [
+    "", "janvier", "f\u00e9vrier", "mars", "avril", "mai", "juin",
+    "juillet", "ao\u00fbt", "septembre", "octobre", "novembre", "d\u00e9cembre",
+]
+
+
+def _get_notion_client() -> Client:
+    return Client(auth=NOTION_TOKEN)
+
+
+def _make_display_title(habit: Habit, ref_date: date | None = None) -> str:
+    """Return a human-readable page title based on frequency and date."""
+    d = ref_date or date.today()
+    if habit.frequency == "daily":
+        return f"{habit.name} \u2013 {d.day} {MONTHS_FR[d.month]} {d.year}"
+    elif habit.frequency == "weekly":
+        iso = d.isocalendar()
+        return f"{habit.name} \u2013 Semaine {iso.week:02d}, {iso.year}"
+    elif habit.frequency == "monthly":
+        return f"{habit.name} \u2013 {MONTHS_FR[d.month].capitalize()} {d.year}"
+    return f"{habit.name} \u2013 {d.isoformat()}"
+
+
+def page_exists(habit: Habit, ref_date: date | None = None) -> str | None:
+    """Check if a page with this habit key already exists in the Generated DB.
+
+    Returns the page URL or None.
+    Queries the Generated database directly by Key property.
+    Falls back to Notion search if the Generated DB is not configured.
+    """
+    client = _get_notion_client()
+    key = make_habit_key(habit.name, habit.frequency, ref_date)
+
+    if RITUALFLOW_GENERATED_DB_ID:
+        try:
+            results = client.databases.query(
+                database_id=RITUALFLOW_GENERATED_DB_ID,
+                filter={"property": "Key", "rich_text": {"equals": key}},
+            )
+            pages = results.get("results", [])
+            if pages:
+                return pages[0].get("url")
+            return None
+        except Exception:
+            pass  # fallback to search below
+
+    # Fallback: full-text search filtered by parent database
+    results = client.search(
+        query=key,
+        filter={"property": "object", "value": "page"},
+    )
+    db_id_clean = (RITUALFLOW_GENERATED_DB_ID or "").replace("-", "")
+    for page in results.get("results", []):
+        parent = page.get("parent", {})
+        if db_id_clean and parent.get("database_id", "").replace("-", "") != db_id_clean:
+            continue
+        props = page.get("properties", {})
+        key_val = "".join(
+            p.get("plain_text", "")
+            for p in props.get("Key", {}).get("rich_text", [])
+        )
+        if key_val == key:
+            return page.get("url")
+
+    return None
+
+
+def create_page(habit: Habit, content: str, ref_date: date | None = None) -> str:
+    """Create an entry in the Generated database. Returns the page URL."""
+    client = _get_notion_client()
+    key = make_habit_key(habit.name, habit.frequency, ref_date)
+    display_title = _make_display_title(habit, ref_date)
+    ref = ref_date or date.today()
+
+    if not RITUALFLOW_GENERATED_DB_ID:
+        raise RuntimeError(
+            "RITUALFLOW_GENERATED_DB_ID not set. Run 'ritualflow setup' first."
+        )
+
+    # Build all blocks from markdown content
+    all_blocks = _markdown_to_blocks(content)
+
+    # Create the page entry in the Generated database
+    first_batch = all_blocks[:NOTION_BLOCK_LIMIT]
+    page = client.pages.create(
+        parent={"database_id": RITUALFLOW_GENERATED_DB_ID},
+        icon={"type": "emoji", "emoji": _category_emoji(habit.category)},
+        properties={
+            "Name": {"title": [{"text": {"content": display_title}}]},
+            "Key":  {"rich_text": [{"text": {"content": key}}]},
+            "Habit": {"select": {"name": habit.name}},
+            "Frequency": {"select": {"name": habit.frequency}},
+            "Date": {"date": {"start": format_date_for_notion(ref)}},
+            "Lu": {"checkbox": False},
+        },
+        children=first_batch,
+    )
+    page_id = page["id"]
+
+    # Append remaining blocks in batches (Notion limit: 100 per request)
+    remaining = all_blocks[NOTION_BLOCK_LIMIT:]
+    while remaining:
+        batch = remaining[:NOTION_BLOCK_LIMIT]
+        client.blocks.children.append(block_id=page_id, children=batch)
+        remaining = remaining[NOTION_BLOCK_LIMIT:]
+
+    # Update Last Run on the habit entry in the Habits database
+    _update_last_run(client, habit.id, ref_date)
+
+    return page["url"]
+
+
+def _update_last_run(client: Client, habit_page_id: str, ref_date: date | None = None):
+    """Update the Last Run date property on the habit's database page."""
+    try:
+        client.pages.update(
+            page_id=habit_page_id,
+            properties={
+                "Last Run": {"date": {"start": format_date_for_notion(ref_date)}}
+            },
+        )
+    except Exception as e:
+        print(f"  [warn] Could not update Last Run: {e}")
+
+
+def _category_emoji(category: str) -> str:
+    return {
+        "tech":    "\U0001f9e0",  # 🧠
+        "culture": "\U0001f4a1",  # 💡
+        "wellness":"\U0001f4cd",  # 📍
+        "fun":     "\U0001f389",  # 🎉
+    }.get(category.lower(), "\u2728")  # ✨
+
+
+def _markdown_to_blocks(markdown: str) -> list[dict]:
+    """Convert markdown text to Notion API block objects."""
+    lines = markdown.split("\n")
+    blocks = []
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        if not stripped:
+            i += 1
+            continue
+
+        # Horizontal rule
+        if stripped in ("---", "***", "___"):
+            blocks.append({"object": "block", "type": "divider", "divider": {}})
+            i += 1
+            continue
+
+        # Details/toggle block
+        if stripped.startswith("<details>"):
+            toggle_title, toggle_children, i = _parse_details(lines, i)
+            blocks.append(
+                {
+                    "object": "block",
+                    "type": "toggle",
+                    "toggle": {
+                        "rich_text": [{"type": "text", "text": {"content": toggle_title}}],
+                        "children": toggle_children,
+                    },
+                }
+            )
+            continue
+
+        if stripped in ("</details>", "</summary>"):
+            i += 1
+            continue
+
+        # Headings
+        if stripped.startswith("### "):
+            blocks.append(_heading_block(stripped[4:], 3))
+            i += 1
+            continue
+        if stripped.startswith("## "):
+            blocks.append(_heading_block(stripped[3:], 2))
+            i += 1
+            continue
+        if stripped.startswith("# "):
+            blocks.append(_heading_block(stripped[2:], 1))
+            i += 1
+            continue
+
+        # Blockquote
+        if stripped.startswith("> "):
+            blocks.append({
+                "object": "block",
+                "type": "quote",
+                "quote": {"rich_text": _parse_rich_text(stripped[2:])},
+            })
+            i += 1
+            continue
+
+        # Bullet point
+        if stripped.startswith("- "):
+            blocks.append({
+                "object": "block",
+                "type": "bulleted_list_item",
+                "bulleted_list_item": {"rich_text": _parse_rich_text(stripped[2:])},
+            })
+            i += 1
+            continue
+
+        # Numbered list
+        if len(stripped) > 2 and stripped[0].isdigit() and stripped[1] in (".", ")"):
+            text = stripped[2:].strip()
+            blocks.append({
+                "object": "block",
+                "type": "numbered_list_item",
+                "numbered_list_item": {"rich_text": _parse_rich_text(text)},
+            })
+            i += 1
+            continue
+
+        # Paragraph
+        blocks.append({
+            "object": "block",
+            "type": "paragraph",
+            "paragraph": {"rich_text": _parse_rich_text(stripped)},
+        })
+        i += 1
+
+    return blocks
+
+
+def _parse_details(lines: list[str], start: int) -> tuple[str, list[dict], int]:
+    """Parse <details><summary>...</summary>...</details> into a toggle block."""
+    i = start + 1
+    title = "Show Answer"
+    children = []
+
+    while i < len(lines):
+        stripped = lines[i].strip()
+        if stripped.startswith("<summary>"):
+            title = stripped.replace("<summary>", "").replace("</summary>", "").strip()
+            i += 1
+            break
+        i += 1
+
+    while i < len(lines):
+        stripped = lines[i].strip()
+        if stripped == "</details>":
+            i += 1
+            break
+        if stripped and stripped not in ("</summary>",):
+            children.append({
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {"rich_text": _parse_rich_text(stripped)},
+            })
+        i += 1
+
+    return title, children, i
+
+
+def _heading_block(text: str, level: int) -> dict:
+    key = f"heading_{level}"
+    return {
+        "object": "block",
+        "type": key,
+        key: {"rich_text": _parse_rich_text(text)},
+    }
+
+
+def _parse_rich_text(text: str) -> list[dict]:
+    """Parse inline markdown (**bold**, *italic*, `code`) into Notion rich text."""
+    import re
+
+    segments = []
+    pattern = re.compile(r"(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)")
+    last_end = 0
+
+    for match in pattern.finditer(text):
+        if match.start() > last_end:
+            plain = text[last_end:match.start()]
+            if plain:
+                segments.append({"type": "text", "text": {"content": plain}})
+
+        if match.group(2):  # **bold**
+            segments.append({
+                "type": "text",
+                "text": {"content": match.group(2)},
+                "annotations": {"bold": True},
+            })
+        elif match.group(3):  # *italic*
+            segments.append({
+                "type": "text",
+                "text": {"content": match.group(3)},
+                "annotations": {"italic": True},
+            })
+        elif match.group(4):  # `code`
+            segments.append({
+                "type": "text",
+                "text": {"content": match.group(4)},
+                "annotations": {"code": True},
+            })
+
+        last_end = match.end()
+
+    if last_end < len(text):
+        remaining = text[last_end:]
+        if remaining:
+            segments.append({"type": "text", "text": {"content": remaining}})
+
+    if not segments:
+        segments.append({"type": "text", "text": {"content": text}})
+
+    return segments
