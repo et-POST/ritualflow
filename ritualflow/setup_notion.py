@@ -47,7 +47,7 @@ def add_habit(name: str, frequency: str, prompt: str, category: str, active: boo
 
 
 def setup_database(parent_page_id: str | None = None) -> str:
-    """Create the RitualFlow - Generated database. Returns the Notion block ID."""
+    """Create the RitualFlow database. Returns db_id."""
     client = Client(auth=NOTION_TOKEN)
     parent_id = parent_page_id or RITUALFLOW_OUTPUT_PAGE_ID
 
@@ -69,8 +69,8 @@ def setup_database(parent_page_id: str | None = None) -> str:
                 "Category": {
                     "select": {
                         "options": [
-                            {"name": "tech",   "color": "blue"},
-                            {"name": "wellness",  "color": "green"},
+                            {"name": "tech", "color": "blue"},
+                            {"name": "wellness", "color": "green"},
                             {"name": "culture", "color": "purple"},
                         ]
                     }
@@ -90,19 +90,23 @@ def setup_database(parent_page_id: str | None = None) -> str:
         },
     )
     db_id = db["id"]
-    print(f"Created Generated database: {db_id}")
+    print(f"  DB ID: {db_id}")
 
     # Populate with example habits
     for habit in EXAMPLE_HABITS:
-        add_habit(
-            name=habit["name"],
-            frequency=habit["frequency"],
-            prompt=habit["prompt"],
-            category=habit["category"],
-            database_id=db_id,
-            active=False,
-        )
-        print(f"  Added habit: {habit['name']}")
+        try:
+            add_habit(
+                name=habit["name"],
+                frequency=habit["frequency"],
+                prompt=habit["prompt"],
+                category=habit["category"],
+                database_id=db_id,
+                active=False,
+            )
+            print(f"  Added habit: {habit['name']}")
+        except Exception as e:
+            print(f"  [warn] Could not add habit '{habit['name']}': {e}")
+            break
 
     return db_id
 
