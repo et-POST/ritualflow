@@ -89,25 +89,8 @@ def setup_database(parent_page_id: str | None = None) -> str:
             }
         },
     )
-    collection_id = db["id"]
-    print(f"  Collection ID (API): {collection_id}")
-
-    # With is_inline=True, Notion creates a block in the parent page whose ID differs
-    # from the collection ID. The block ID is what Notion shows in its URL.
-    # We fetch it by listing the parent page's children.
-    block_id = collection_id
-    try:
-        children = client.blocks.children.list(block_id=parent_id)
-        for block in children.get("results", []):
-            if block.get("type") == "child_database":
-                title = block.get("child_database", {}).get("title", "")
-                if "Generated" in title:
-                    block_id = block["id"]
-                    break
-    except Exception as e:
-        print(f"  [warn] Could not fetch block ID, falling back to collection ID: {e}")
-
-    print(f"Created Generated database: {block_id}")
+    db_id = db["id"]
+    print(f"Created Generated database: {db_id}")
 
     # Populate with example habits
     for habit in EXAMPLE_HABITS:
@@ -116,12 +99,12 @@ def setup_database(parent_page_id: str | None = None) -> str:
             frequency=habit["frequency"],
             prompt=habit["prompt"],
             category=habit["category"],
-            database_id=collection_id,
+            database_id=db_id,
             active=False,
         )
         print(f"  Added habit: {habit['name']}")
 
-    return block_id
+    return db_id
 
 
 def setup_stats_block(page_id: str) -> str:
