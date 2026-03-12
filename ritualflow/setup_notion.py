@@ -1,27 +1,9 @@
-"""Setup the Notion database and populate with example habits."""
-
-import json
-import urllib.request
+"""Setup the RitualFlow - Generated Notion database."""
 
 from notion_client import Client
 
 from ritualflow.config import NOTION_TOKEN, RITUALFLOW_OUTPUT_PAGE_ID
 
-
-def _notion_patch(token: str, path: str, body: dict) -> dict:
-    """Direct PATCH to Notion API — bypasses notion-client SDK bugs with properties."""
-    req = urllib.request.Request(
-        f"https://api.notion.com/v1/{path}",
-        data=json.dumps(body).encode(),
-        method="PATCH",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Notion-Version": "2022-06-28",
-        },
-    )
-    with urllib.request.urlopen(req) as resp:
-        return json.loads(resp.read())
 
 
 EXAMPLE_HABITS = [
@@ -32,13 +14,7 @@ EXAMPLE_HABITS = [
         "category": "tech",
     },
     {
-        "name": "Fun Fact du Jour",
-        "frequency": "daily",
-        "prompt": "Generate a surprising and educational fun fact",
-        "category": "fun",
-    },
-    {
-        "name": "Decouverte Paris",
+        "name": "Discover Paris",
         "frequency": "monthly",
         "prompt": "Suggest an interesting place to discover in Paris",
         "category": "wellness",
@@ -51,7 +27,7 @@ EXAMPLE_HABITS = [
     },
 ]
 
-# Habit name → SELECT options for the Generated DB
+# SELECT options for the Habit column in the Generated DB
 HABIT_SELECT_OPTIONS = [
     {"name": "Daily Tech Quiz",    "color": "blue"},
     {"name": "Fun Fact du Jour",   "color": "yellow"},
@@ -60,70 +36,25 @@ HABIT_SELECT_OPTIONS = [
 ]
 
 
-def setup_database(parent_page_id: str | None = None) -> str:
-    """Create the RitualFlow habits database and return its ID."""
+def add_habit(name: str, frequency: str, prompt: str, category: str) -> str:
+    """Add a habit entry to the Habits database. Returns the new page ID."""
+    if not RITUALFLOW_DB_ID:
+        raise RuntimeError("RITUALFLOW_DB_ID is not set in .env")
     client = Client(auth=NOTION_TOKEN)
-    parent_id = parent_page_id or RITUALFLOW_OUTPUT_PAGE_ID
-
-    if not parent_id:
-        raise RuntimeError(
-            "No parent page ID. Set RITUALFLOW_OUTPUT_PAGE_ID or pass --parent-page-id."
-        )
-
-    db = client.databases.create(
-        parent={"type": "page_id", "page_id": parent_id},
-        title=[{"type": "text", "text": {"content": "RitualFlow - Habits"}}],
-        icon={"type": "emoji", "emoji": "\u26a1"},
+    page = client.pages.create(
+        parent={"database_id": RITUALFLOW_DB_ID},
         properties={
-            "Name": {"title": {}},
-            "Frequency": {
-                "select": {
-                    "options": [
-                        {"name": "daily",   "color": "blue"},
-                        {"name": "weekly",  "color": "green"},
-                        {"name": "monthly", "color": "purple"},
-                    ]
-                }
-            },
-            "Prompt": {"rich_text": {}},
-            "Category": {
-                "select": {
-                    "options": [
-                        {"name": "tech",    "color": "blue"},
-                        {"name": "culture", "color": "orange"},
-                        {"name": "wellness","color": "green"},
-                        {"name": "fun",     "color": "yellow"},
-                    ]
-                }
-            },
-            "Active": {"checkbox": {}},
-            "Output Page": {"rich_text": {}},
-            "Last Run": {"date": {}},
+            "Name":      {"title": [{"text": {"content": name}}]},
+            "Frequency": {"select": {"name": frequency}},
+            "Prompt":    {"rich_text": [{"text": {"content": prompt}}]},
+            "Category":  {"select": {"name": category}},
+            "Active":    {"checkbox": True},
         },
     )
-
-    db_id = db["id"]
-    print(f"Created Habits database: {db_id}")
-
-    # Populate with example habits
-    for habit in EXAMPLE_HABITS:
-        client.pages.create(
-            parent={"database_id": db_id},
-            properties={
-                "Name":      {"title": [{"text": {"content": habit["name"]}}]},
-                "Frequency": {"select": {"name": habit["frequency"]}},
-                "Prompt":    {"rich_text": [{"text": {"content": habit["prompt"]}}]},
-                "Category":  {"select": {"name": habit["category"]}},
-                "Active":    {"checkbox": True},
-            },
-        )
-        print(f"  Added habit: {habit['name']}")
-
-    print(f"\nHabits DB ready! Add to .env:\nRITUALFLOW_DB_ID={db_id}")
-    return db_id
+    return page["id"]
 
 
-def setup_generated_db(parent_page_id: str | None = None) -> str:
+def setup_database(parent_page_id: str | None = None) -> str:
     """Create the RitualFlow - Generated database. Returns the Notion block ID."""
     client = Client(auth=NOTION_TOKEN)
     parent_id = parent_page_id or RITUALFLOW_OUTPUT_PAGE_ID
@@ -133,19 +64,38 @@ def setup_generated_db(parent_page_id: str | None = None) -> str:
             "No parent page ID. Set RITUALFLOW_OUTPUT_PAGE_ID or pass --parent-page-id."
         )
 
-    # Step 1: Create with minimal properties — the SDK ignores extra properties on create.
     db = client.databases.create(
         parent={"type": "page_id", "page_id": parent_id},
         title=[{"type": "text", "text": {"content": "RitualFlow - Generated"}}],
         icon={"type": "emoji", "emoji": "\U0001f4d6"},
         is_inline=True,
-        properties={"Name": {"title": {}}},
+        initial_data_source={
+            "properties": {
+                "Name": {"title": {}},
+                "Active": {"checkbox": {}},
+                "Prompt": {"rich_text": {}},
+                "Category": {
+                    "select": {"options": HABIT_SELECT_OPTIONS}
+                },
+                "Frequency": {
+                    "select": {
+                        "options": [
+                            {"name": "daily",   "color": "blue"},
+                            {"name": "weekly",  "color": "green"},
+                            {"name": "monthly", "color": "purple"},
+                        ]
+                    }
+                },
+                "Date": {"date": {}},
+                "Lu": {"checkbox": {}},
+            }
+        },
     )
     collection_id = db["id"]
     print(f"  Collection ID (API): {collection_id}")
 
-    # Step 2: With is_inline=True, Notion creates a block in the parent page whose ID
-    # differs from the collection ID. The block ID is what Notion shows in its URL.
+    # With is_inline=True, Notion creates a block in the parent page whose ID differs
+    # from the collection ID. The block ID is what Notion shows in its URL.
     # We fetch it by listing the parent page's children.
     block_id = collection_id
     try:
@@ -161,28 +111,19 @@ def setup_generated_db(parent_page_id: str | None = None) -> str:
 
     print(f"Created Generated database: {block_id}")
 
-    # Step 3: Add properties via direct HTTP — bypasses the SDK bug where
-    # databases.update() silently ignores the properties argument.
-    _notion_patch(NOTION_TOKEN, f"databases/{block_id}", {
-        "properties": {
-            "Key": {"rich_text": {}},
-            "Habit": {
-                "select": {"options": HABIT_SELECT_OPTIONS}
+    # Populate the Habits DB with example habits
+    for habit in EXAMPLE_HABITS:
+        client.pages.create(
+            parent={"database_id": collection_id},
+            properties={
+                "Name":      {"title": [{"text": {"content": habit["name"]}}]},
+                "Frequency": {"select": {"name": habit["frequency"]}},
+                "Prompt":    {"rich_text": [{"text": {"content": habit["prompt"]}}]},
+                "Category":  {"select": {"name": habit["category"]}},
+                "Active":    {"checkbox": False},
             },
-            "Frequency": {
-                "select": {
-                    "options": [
-                        {"name": "daily",   "color": "blue"},
-                        {"name": "weekly",  "color": "green"},
-                        {"name": "monthly", "color": "purple"},
-                    ]
-                }
-            },
-            "Date": {"date": {}},
-            "Lu": {"checkbox": {}},
-        }
-    })
-    print("  Properties added: Key, Habit, Frequency, Date, Lu")
+        )
+        print(f"  Added habit: {habit['name']}")
 
     return block_id
 

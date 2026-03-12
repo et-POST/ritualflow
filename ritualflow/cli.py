@@ -74,7 +74,7 @@ def setup(parent_page_id: str | None):
     validate_config()
 
     from ritualflow.config import RITUALFLOW_OUTPUT_PAGE_ID
-    from ritualflow.setup_notion import setup_generated_db, setup_stats_block
+    from ritualflow.setup_notion import setup_database, setup_stats_block
 
     pid = parent_page_id or RITUALFLOW_OUTPUT_PAGE_ID
     if not pid:
@@ -82,7 +82,7 @@ def setup(parent_page_id: str | None):
         return
 
     click.echo("Creating Generated database...")
-    db_id = setup_generated_db(pid)
+    db_id = setup_database(pid)
 
     click.echo("Creating stats callout block on main page...")
     block_id = setup_stats_block(pid)
@@ -99,16 +99,6 @@ def setup(parent_page_id: str | None):
     click.echo("  - Monthly : filter Frequency = monthly, group by Habit")
     click.echo("  - A lire  : filter Lu = false, sort by Date desc")
 
-
-@main.command()
-@click.option("--parent-page-id", help="Notion page ID to create the Habits database under.")
-def setup_habits(parent_page_id: str | None):
-    """Create the RitualFlow Habits database with example habits."""
-    validate_config()
-
-    from ritualflow.setup_notion import setup_database
-    db_id = setup_database(parent_page_id)
-    click.echo(f"\nHabits database ready: {db_id}")
 
 
 @main.command()
