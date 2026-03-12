@@ -2,24 +2,24 @@
 
 from notion_client import Client
 
-from ritualflow.config import NOTION_TOKEN, RITUALFLOW_OUTPUT_PAGE_ID
+from ritualflow.config import NOTION_TOKEN, RITUALFLOW_GENERATED_DB_ID, RITUALFLOW_OUTPUT_PAGE_ID
 
 
 EXAMPLE_HABITS = [
     {
-        "name": "Tech Quiz",
+        "name": "Tech Quiz (example)",
         "frequency": "daily",
         "prompt": "Generate a 5-question tech quiz on a random programming topic",
         "category": "tech",
     },
     {
-        "name": "Discover Paris",
+        "name": "Discover Paris (example)",
         "frequency": "monthly",
         "prompt": "Suggest an interesting place to discover in Paris",
         "category": "wellness",
     },
     {
-        "name": "Tech Digest",
+        "name": "Tech Digest (example)",
         "frequency": "weekly",
         "prompt": "Generate a weekly summary of tech trends and news",
         "category": "tech",
@@ -27,19 +27,20 @@ EXAMPLE_HABITS = [
 ]
 
 
-def add_habit(name: str, frequency: str, prompt: str, category: str) -> str:
-    """Add a habit entry to the Habits database. Returns the new page ID."""
-    if not RITUALFLOW_DB_ID:
-        raise RuntimeError("RITUALFLOW_DB_ID is not set in .env")
+def add_habit(name: str, frequency: str, prompt: str, category: str, active: bool = True, database_id: str | None = None) -> str:
+    """Add a habit entry to the habits database. Returns the new page ID."""
+    db_id = database_id or RITUALFLOW_GENERATED_DB_ID
+    if not db_id:
+        raise RuntimeError("No database ID — set RITUALFLOW_GENERATED_DB_ID in .env or pass database_id.")
     client = Client(auth=NOTION_TOKEN)
     page = client.pages.create(
-        parent={"database_id": RITUALFLOW_DB_ID},
+        parent={"database_id": db_id},
         properties={
             "Name":      {"title": [{"text": {"content": name}}]},
             "Frequency": {"select": {"name": frequency}},
             "Prompt":    {"rich_text": [{"text": {"content": prompt}}]},
             "Category":  {"select": {"name": category}},
-            "Active":    {"checkbox": True},
+            "Active":    {"checkbox": active},
         },
     )
     return page["id"]
@@ -108,17 +109,15 @@ def setup_database(parent_page_id: str | None = None) -> str:
 
     print(f"Created Generated database: {block_id}")
 
-    # Populate the Habits DB with example habits
+    # Populate with example habits
     for habit in EXAMPLE_HABITS:
-        client.pages.create(
-            parent={"database_id": collection_id},
-            properties={
-                "Name":      {"title": [{"text": {"content": habit["name"]}}]},
-                "Frequency": {"select": {"name": habit["frequency"]}},
-                "Prompt":    {"rich_text": [{"text": {"content": habit["prompt"]}}]},
-                "Category":  {"select": {"name": habit["category"]}},
-                "Active":    {"checkbox": False},
-            },
+        add_habit(
+            name=habit["name"],
+            frequency=habit["frequency"],
+            prompt=habit["prompt"],
+            category=habit["category"],
+            database_id=collection_id,
+            active=False,
         )
         print(f"  Added habit: {habit['name']}")
 
