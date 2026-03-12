@@ -5,10 +5,9 @@ from notion_client import Client
 from ritualflow.config import NOTION_TOKEN, RITUALFLOW_OUTPUT_PAGE_ID
 
 
-
 EXAMPLE_HABITS = [
     {
-        "name": "Daily Tech Quiz",
+        "name": "Tech Quiz",
         "frequency": "daily",
         "prompt": "Generate a 5-question tech quiz on a random programming topic",
         "category": "tech",
@@ -20,19 +19,11 @@ EXAMPLE_HABITS = [
         "category": "wellness",
     },
     {
-        "name": "Weekly Tech Digest",
+        "name": "Tech Digest",
         "frequency": "weekly",
         "prompt": "Generate a weekly summary of tech trends and news",
         "category": "tech",
     },
-]
-
-# SELECT options for the Habit column in the Generated DB
-HABIT_SELECT_OPTIONS = [
-    {"name": "Daily Tech Quiz",    "color": "blue"},
-    {"name": "Fun Fact du Jour",   "color": "yellow"},
-    {"name": "Decouverte Paris",   "color": "green"},
-    {"name": "Weekly Tech Digest", "color": "purple"},
 ]
 
 
@@ -75,7 +66,13 @@ def setup_database(parent_page_id: str | None = None) -> str:
                 "Active": {"checkbox": {}},
                 "Prompt": {"rich_text": {}},
                 "Category": {
-                    "select": {"options": HABIT_SELECT_OPTIONS}
+                    "select": {
+                        "options": [
+                            {"name": "tech",   "color": "blue"},
+                            {"name": "wellness",  "color": "green"},
+                            {"name": "culture", "color": "purple"},
+                        ]
+                    }
                 },
                 "Frequency": {
                     "select": {
