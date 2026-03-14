@@ -4,12 +4,8 @@ from datetime import date
 
 from notion_client import Client
 
-from ritualflow.config import (
-    NOTION_TOKEN,
-    RITUALFLOW_GENERATED_DB_ID,
-)
+from ritualflow.config import NOTION_TOKEN
 from ritualflow.habits import Habit
-from ritualflow.utils import make_habit_key, format_date_for_notion, notion_query_db
 
 # Notion API hard limit for children blocks per request
 NOTION_BLOCK_LIMIT = 100
@@ -38,75 +34,41 @@ def _make_display_title(habit: Habit, ref_date: date | None = None) -> str:
 
 
 def page_exists(habit: Habit, ref_date: date | None = None) -> str | None:
-    """Check if a page with this habit key already exists in the Generated DB.
+    """Check if a child page with this title already exists under the habit.
 
     Returns the page URL or None.
-    Queries the Generated database directly by Key property.
-    Falls back to Notion search if the Generated DB is not configured.
     """
     client = _get_notion_client()
-    key = make_habit_key(habit.name, habit.frequency, ref_date)
+    display_title = _make_display_title(habit, ref_date)
 
-    if RITUALFLOW_GENERATED_DB_ID:
-        try:
-            pages = notion_query_db(
-                NOTION_TOKEN,
-                RITUALFLOW_GENERATED_DB_ID,
-                filter={"property": "Prompt", "rich_text": {"equals": key}},
-            )
-            if pages:
-                return pages[0].get("url")
-            return None
-        except Exception:
-            pass  # fallback to search below
-
-    # Fallback: full-text search filtered by parent database
-    results = client.search(
-        query=key,
-        filter={"property": "object", "value": "page"},
-    )
-    db_id_clean = (RITUALFLOW_GENERATED_DB_ID or "").replace("-", "")
-    for page in results.get("results", []):
-        parent = page.get("parent", {})
-        if db_id_clean and parent.get("database_id", "").replace("-", "") != db_id_clean:
-            continue
-        props = page.get("properties", {})
-        key_val = "".join(
-            p.get("plain_text", "")
-            for p in props.get("Key", {}).get("rich_text", [])
-        )
-        if key_val == key:
-            return page.get("url")
+    try:
+        children = client.blocks.children.list(block_id=habit.id)
+        for block in children.get("results", []):
+            if block.get("type") == "child_page":
+                if block["child_page"]["title"] == display_title:
+                    page_id = block["id"].replace("-", "")
+                    return f"https://www.notion.so/{page_id}"
+    except Exception:
+        pass
 
     return None
 
 
 def create_page(habit: Habit, content: str, ref_date: date | None = None) -> str:
-    """Create an entry in the Generated database. Returns the page URL."""
+    """Create a child page under the habit row. Returns the page URL."""
     client = _get_notion_client()
-    key = make_habit_key(habit.name, habit.frequency, ref_date)
     display_title = _make_display_title(habit, ref_date)
-    ref = ref_date or date.today()
-
-    if not RITUALFLOW_GENERATED_DB_ID:
-        raise RuntimeError(
-            "RITUALFLOW_GENERATED_DB_ID not set. Run 'ritualflow setup' first."
-        )
 
     # Build all blocks from markdown content
     all_blocks = _markdown_to_blocks(content)
 
-    # Create the page entry in the Generated database
+    # Create the page as a child of the habit row
     first_batch = all_blocks[:NOTION_BLOCK_LIMIT]
     page = client.pages.create(
-        parent={"database_id": RITUALFLOW_GENERATED_DB_ID},
+        parent={"page_id": habit.id},
         icon={"type": "emoji", "emoji": _category_emoji(habit.category)},
         properties={
-            "Name":      {"title": [{"text": {"content": display_title}}]},
-            "Prompt":    {"rich_text": [{"text": {"content": key}}]},
-            "Frequency": {"select": {"name": habit.frequency}},
-            "Date":      {"date": {"start": format_date_for_notion(ref)}},
-            "Lu":        {"checkbox": False},
+            "title": {"title": [{"text": {"content": display_title}}]},
         },
         children=first_batch,
     )
@@ -119,23 +81,7 @@ def create_page(habit: Habit, content: str, ref_date: date | None = None) -> str
         client.blocks.children.append(block_id=page_id, children=batch)
         remaining = remaining[NOTION_BLOCK_LIMIT:]
 
-    # Update Last Run on the habit entry in the Habits database
-    _update_last_run(client, habit.id, ref_date)
-
     return page["url"]
-
-
-def _update_last_run(client: Client, habit_page_id: str, ref_date: date | None = None):
-    """Update the Last Run date property on the habit's database page."""
-    try:
-        client.pages.update(
-            page_id=habit_page_id,
-            properties={
-                "Last Run": {"date": {"start": format_date_for_notion(ref_date)}}
-            },
-        )
-    except Exception as e:
-        print(f"  [warn] Could not update Last Run: {e}")
 
 
 def _category_emoji(category: str) -> str:
