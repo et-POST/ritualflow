@@ -48,6 +48,7 @@ def run(frequency: str | None, dry_run: bool, force: bool):
             click.echo(f"  >> Already generated: {existing_url}\n")
             continue
 
+        click.echo(f"  [prompt] {habit.prompt!r}")
         click.echo("  -> Generating content...")
         content = generate_content(habit)
 

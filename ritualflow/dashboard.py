@@ -9,6 +9,7 @@ from ritualflow.config import (
     RITUALFLOW_GENERATED_DB_ID,
     RITUALFLOW_STATS_BLOCK_ID,
 )
+from ritualflow.utils import notion_query_db
 
 
 def _get_notion_client() -> Client:
@@ -20,13 +21,14 @@ def _monday_of_week(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 
-def _query_generated(client: Client, start_date: str, end_date: str) -> list[dict]:
+def _query_generated(start_date: str, end_date: str) -> list[dict]:
     """Query the Generated database for entries in [start_date, end_date]."""
     if not RITUALFLOW_GENERATED_DB_ID:
         return []
     try:
-        results = client.databases.query(
-            database_id=RITUALFLOW_GENERATED_DB_ID,
+        return notion_query_db(
+            NOTION_TOKEN,
+            RITUALFLOW_GENERATED_DB_ID,
             filter={
                 "and": [
                     {"property": "Date", "date": {"on_or_after": start_date}},
@@ -34,7 +36,6 @@ def _query_generated(client: Client, start_date: str, end_date: str) -> list[dic
                 ]
             },
         )
-        return results.get("results", [])
     except Exception as e:
         print(f"  [warn] Could not query Generated DB: {e}")
         return []
@@ -95,8 +96,8 @@ def update_stats() -> bool:
     last_day = next_month_first - timedelta(days=1)
     month_start = date(today.year, today.month, 1)
 
-    week_pages  = _query_generated(client, monday.isoformat(), sunday.isoformat())
-    month_pages = _query_generated(client, month_start.isoformat(), last_day.isoformat())
+    week_pages  = _query_generated(monday.isoformat(), sunday.isoformat())
+    month_pages = _query_generated(month_start.isoformat(), last_day.isoformat())
 
     week_total,  week_read  = _count_stats(week_pages)
     month_total, month_read = _count_stats(month_pages)

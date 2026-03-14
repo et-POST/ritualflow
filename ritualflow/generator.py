@@ -75,17 +75,23 @@ def _generate_via_claude_code(prompt: str) -> str:
 
 
 def _build_prompt(habit: Habit, date_str: str) -> str:
-    """Build the generation prompt from template or custom prompt."""
-    template = get_template(habit.category)
+    """Build the generation prompt: custom prompt takes priority over category template."""
+    # Custom prompt wins — always use it if defined
+    if habit.prompt:
+        return (
+            f"{habit.prompt}\n\n"
+            f"Date: {date_str}\n"
+            f"Format the output as clean Notion-compatible Markdown with headers, "
+            f"bullet points, and sections. Make it engaging and well-structured."
+        )
 
+    # Fallback: category template
+    template = get_template(habit.category)
     if template:
         return template.replace("{date}", date_str)
 
-    # Custom habit: use the user-defined prompt
-    base = habit.prompt or f"Generate content about: {habit.name}"
     return (
-        f"{base}\n\n"
+        f"Generate content about: {habit.name}\n\n"
         f"Date: {date_str}\n"
-        f"Format the output as clean Notion-compatible Markdown with headers, "
-        f"bullet points, and sections. Make it engaging and well-structured."
+        f"Format the output as clean Notion-compatible Markdown."
     )

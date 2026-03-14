@@ -1,9 +1,8 @@
 """Read habit definitions from Notion database."""
 
 from dataclasses import dataclass
-from notion_client import Client
-
-from ritualflow.config import NOTION_TOKEN, RITUALFLOW_DS_ID
+from ritualflow.config import NOTION_TOKEN, RITUALFLOW_GENERATED_DB_ID
+from ritualflow.utils import notion_query_db
 
 
 @dataclass
@@ -17,14 +16,8 @@ class Habit:
     output_page_id: str | None
 
 
-def _get_notion_client() -> Client:
-    return Client(auth=NOTION_TOKEN)
-
-
 def get_active_habits(frequency: str | None = None) -> list[Habit]:
     """Query the RitualFlow data source for active habits, optionally filtered by frequency."""
-    client = _get_notion_client()
-
     filter_conditions = [{"property": "Active", "checkbox": {"equals": True}}]
     if frequency:
         filter_conditions.append(
@@ -36,13 +29,10 @@ def get_active_habits(frequency: str | None = None) -> list[Habit]:
     else:
         notion_filter = {"and": filter_conditions}
 
-    results = client.data_sources.query(
-        data_source_id=RITUALFLOW_DS_ID,
-        filter=notion_filter,
-    )
+    pages = notion_query_db(NOTION_TOKEN, RITUALFLOW_GENERATED_DB_ID, filter=notion_filter)
 
     habits = []
-    for page in results["results"]:
+    for page in pages:
         props = page["properties"]
         name = _get_title(props.get("Name", {}))
         freq = _get_select(props.get("Frequency", {}))

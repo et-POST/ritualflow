@@ -9,7 +9,7 @@ from ritualflow.config import (
     RITUALFLOW_GENERATED_DB_ID,
 )
 from ritualflow.habits import Habit
-from ritualflow.utils import make_habit_key, format_date_for_notion
+from ritualflow.utils import make_habit_key, format_date_for_notion, notion_query_db
 
 # Notion API hard limit for children blocks per request
 NOTION_BLOCK_LIMIT = 100
@@ -49,11 +49,11 @@ def page_exists(habit: Habit, ref_date: date | None = None) -> str | None:
 
     if RITUALFLOW_GENERATED_DB_ID:
         try:
-            results = client.databases.query(
-                database_id=RITUALFLOW_GENERATED_DB_ID,
-                filter={"property": "Key", "rich_text": {"equals": key}},
+            pages = notion_query_db(
+                NOTION_TOKEN,
+                RITUALFLOW_GENERATED_DB_ID,
+                filter={"property": "Prompt", "rich_text": {"equals": key}},
             )
-            pages = results.get("results", [])
             if pages:
                 return pages[0].get("url")
             return None
@@ -102,12 +102,11 @@ def create_page(habit: Habit, content: str, ref_date: date | None = None) -> str
         parent={"database_id": RITUALFLOW_GENERATED_DB_ID},
         icon={"type": "emoji", "emoji": _category_emoji(habit.category)},
         properties={
-            "Name": {"title": [{"text": {"content": display_title}}]},
-            "Key":  {"rich_text": [{"text": {"content": key}}]},
-            "Habit": {"select": {"name": habit.name}},
+            "Name":      {"title": [{"text": {"content": display_title}}]},
+            "Prompt":    {"rich_text": [{"text": {"content": key}}]},
             "Frequency": {"select": {"name": habit.frequency}},
-            "Date": {"date": {"start": format_date_for_notion(ref)}},
-            "Lu": {"checkbox": False},
+            "Date":      {"date": {"start": format_date_for_notion(ref)}},
+            "Lu":        {"checkbox": False},
         },
         children=first_batch,
     )
