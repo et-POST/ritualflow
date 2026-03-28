@@ -172,7 +172,8 @@ def delete(name: str, yes: bool):
 @main.command()
 @click.argument("name", required=False)
 @click.option("--limit", "-n", default=10, help="Max pages to show per habit.")
-def history(name: str | None, limit: int):
+@click.option("--all", "show_all", is_flag=True, help="Include inactive habits.")
+def history(name: str | None, limit: int, show_all: bool):
     """Show generated pages for a habit (or all habits)."""
     validate_config()
 
@@ -180,7 +181,7 @@ def history(name: str | None, limit: int):
     from ritualflow.utils import notion_list_children
     from ritualflow.config import NOTION_TOKEN
 
-    habits = get_active_habits()
+    habits = get_active_habits(include_inactive=show_all)
     if not habits:
         click.echo("No habits found. Run 'ritualflow setup' first.")
         return
@@ -228,7 +229,8 @@ def history(name: str | None, limit: int):
 
 
 @main.command()
-def status():
+@click.option("--all", "show_all", is_flag=True, help="Include inactive habits.")
+def status(show_all: bool):
     """Show the current state of all habits."""
     validate_config()
 
@@ -237,16 +239,17 @@ def status():
     from ritualflow.utils import notion_list_children
     from ritualflow.config import NOTION_TOKEN
 
-    habits = get_active_habits()
+    habits = get_active_habits(include_inactive=show_all)
 
     if not habits:
         click.echo("No habits found. Run 'ritualflow setup' first.")
         return
 
-    click.echo(f"\n{'Name':<25} {'Freq':<10} {'Now?':<10} {'Pages'}")
-    click.echo("-" * 60)
+    click.echo(f"\n{'Name':<25} {'Freq':<10} {'Active':<9} {'Now?':<10} {'Pages'}")
+    click.echo("-" * 68)
 
     for h in habits:
+        active = "✓" if h.active else "✗"
         done = "YES" if page_exists(h) is not None else "pending"
         # Count child pages under the habit
         total = 0
@@ -255,7 +258,7 @@ def status():
             total = sum(1 for b in children if b.get("type") == "child_page")
         except Exception:
             pass
-        click.echo(f"{h.name:<25} {h.frequency:<10} {done:<10} {total}")
+        click.echo(f"{h.name:<25} {h.frequency:<10} {active:<9} {done:<10} {total}")
 
     click.echo("")
 

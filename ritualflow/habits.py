@@ -16,15 +16,22 @@ class Habit:
     active: bool
 
 
-def get_active_habits(frequency: str | None = None) -> list[Habit]:
-    """Query the RitualFlow data source for active habits, optionally filtered by frequency."""
-    filter_conditions = [{"property": "Active", "checkbox": {"equals": True}}]
+def get_active_habits(frequency: str | None = None, include_inactive: bool = False) -> list[Habit]:
+    """Query the RitualFlow data source for habits, optionally filtered by frequency.
+
+    By default only active habits are returned. Set include_inactive=True to return all.
+    """
+    filter_conditions = []
+    if not include_inactive:
+        filter_conditions.append({"property": "Active", "checkbox": {"equals": True}})
     if frequency:
         filter_conditions.append(
             {"property": "Frequency", "select": {"equals": frequency}}
         )
 
-    if len(filter_conditions) == 1:
+    if len(filter_conditions) == 0:
+        notion_filter = None
+    elif len(filter_conditions) == 1:
         notion_filter = filter_conditions[0]
     else:
         notion_filter = {"and": filter_conditions}
@@ -58,7 +65,7 @@ def get_active_habits(frequency: str | None = None) -> list[Habit]:
                 frequency=freq,
                 prompt=prompt,
                 category=category,
-                active=True,
+                active=props.get("Active", {}).get("checkbox", True),
             )
         )
 
