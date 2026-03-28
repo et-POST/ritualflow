@@ -15,8 +15,11 @@ if sys.platform == "win32":
 def _update_env(key: str, value: str):
     """Update or add a key=value in the .env file."""
     from pathlib import Path
+    from dotenv import find_dotenv
 
-    env_path = Path(__file__).resolve().parent.parent / ".env"
+    # Use dotenv's search (walks up from cwd), fall back to project root
+    found = find_dotenv(usecwd=True)
+    env_path = Path(found) if found else Path(__file__).resolve().parent.parent / ".env"
     if not env_path.exists():
         env_path.write_text(f"{key}={value}\n", encoding="utf-8")
         return
@@ -110,9 +113,12 @@ def setup(parent_page_id: str | None):
     click.echo("Creating stats callout block on main page...")
     block_id = setup_stats_block(pid)
 
-    # Auto-update .env with the new IDs
+    # Auto-update .env with the new IDs and reload in-process config
     _update_env("RITUALFLOW_GENERATED_DB_ID", db_id)
     _update_env("RITUALFLOW_STATS_BLOCK_ID", block_id)
+
+    from ritualflow.config import reload_config
+    reload_config()
 
     click.echo("\n" + "=" * 60)
     click.echo("Setup complete! .env updated automatically:")

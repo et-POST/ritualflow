@@ -31,7 +31,8 @@ def _count_child_pages() -> tuple[int, int]:
 
     try:
         habits = get_active_habits()
-    except Exception:
+    except Exception as e:
+        print(f"  [warn] Could not fetch habits for stats: {e}")
         return 0, 0
 
     for habit in habits:
@@ -46,7 +47,8 @@ def _count_child_pages() -> tuple[int, int]:
                     created_date = date.fromisoformat(created)
                     if created_date >= monday:
                         week_count += 1
-        except Exception:
+        except Exception as e:
+            print(f"  [warn] Could not list pages for '{habit.name}': {e}")
             continue
 
     return week_count, total_count
