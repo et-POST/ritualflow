@@ -51,7 +51,7 @@ def _generate_via_claude_code(prompt: str) -> str:
     env = {k: v for k, v in os.environ.items() if k not in KEYS_TO_REMOVE}
 
     result = subprocess.run(
-        ["claude", "-p", prompt, "--model", "haiku"],
+        ["claude", "-p", prompt, "--model", "haiku", "--allowedTools", "WebSearch,WebFetch"],
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
@@ -81,6 +81,9 @@ def _build_prompt(habit: Habit, date_str: str) -> str:
         return (
             f"{habit.prompt}\n\n"
             f"Date: {date_str}\n"
+            f"Use web search to find the latest information if the topic requires current data.\n"
+            f"Never say you can't access the internet or that your knowledge is outdated.\n"
+            f"Always produce the final content directly — never ask the user to choose.\n"
             f"Format the output as clean Notion-compatible Markdown with headers, "
             f"bullet points, and sections. Make it engaging and well-structured."
         )
