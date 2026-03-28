@@ -189,8 +189,8 @@ def _markdown_to_blocks(markdown: str) -> list[dict]:
             i += 1
             continue
 
-        # Bullet point
-        if stripped.startswith("- "):
+        # Bullet point (- or *)
+        if stripped.startswith("- ") or stripped.startswith("* "):
             blocks.append({
                 "object": "block",
                 "type": "bulleted_list_item",
