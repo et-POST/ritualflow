@@ -4,7 +4,7 @@ import os
 import subprocess
 from datetime import date
 
-from ritualflow.config import ANTHROPIC_API_KEY, ANTHROPIC_MODEL
+from ritualflow.config import ANTHROPIC_API_KEY, ANTHROPIC_MODEL, CLAUDE_CLI_MODEL
 from ritualflow.habits import Habit
 from ritualflow.templates import get_template
 
@@ -51,7 +51,7 @@ def _generate_via_claude_code(prompt: str) -> str:
     env = {k: v for k, v in os.environ.items() if k not in KEYS_TO_REMOVE}
 
     result = subprocess.run(
-        ["claude", "-p", prompt, "--model", "haiku", "--allowedTools", "WebSearch,WebFetch"],
+        ["claude", "-p", prompt, "--model", CLAUDE_CLI_MODEL, "--allowedTools", "WebSearch,WebFetch"],
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,

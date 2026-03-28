@@ -14,7 +14,8 @@ RITUALFLOW_GENERATED_DB_ID = os.getenv("RITUALFLOW_GENERATED_DB_ID") or None
 # Block ID of the stats callout on the main RitualFlow page
 RITUALFLOW_STATS_BLOCK_ID = os.getenv("RITUALFLOW_STATS_BLOCK_ID")
 
-ANTHROPIC_MODEL = "claude-haiku-4-5"
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
+CLAUDE_CLI_MODEL = os.getenv("CLAUDE_CLI_MODEL", "haiku")
 
 
 def validate_config():
