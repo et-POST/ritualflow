@@ -124,6 +124,46 @@ def setup(parent_page_id: str | None):
 
 
 @main.command()
+@click.argument("name")
+@click.option("--freq", type=click.Choice(["daily", "weekly", "monthly"]), required=True, help="Frequency of the habit.")
+@click.option("--prompt", required=True, help="The AI prompt used to generate content.")
+@click.option("--category", type=click.Choice(["tech", "wellness", "culture", "fun"]), default="tech", help="Category of the habit.")
+def add(name: str, freq: str, prompt: str, category: str):
+    """Add a new habit to the database."""
+    validate_config()
+
+    from ritualflow.setup_notion import add_habit
+
+    try:
+        page_id = add_habit(name=name, frequency=freq, prompt=prompt, category=category)
+        click.echo(f"Habit '{name}' added ({freq}, {category}).")
+    except Exception as e:
+        raise click.ClickException(str(e))
+
+
+@main.command()
+@click.argument("name")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+def delete(name: str, yes: bool):
+    """Delete a habit by name."""
+    validate_config()
+
+    from ritualflow.setup_notion import delete_habit
+
+    if not yes:
+        click.confirm(f"Delete habit '{name}'?", abort=True)
+
+    try:
+        found = delete_habit(name)
+        if found:
+            click.echo(f"Habit '{name}' deleted.")
+        else:
+            click.echo(f"Habit '{name}' not found.")
+    except Exception as e:
+        raise click.ClickException(str(e))
+
+
+@main.command()
 def status():
     """Show the current state of all habits."""
     validate_config()

@@ -46,6 +46,28 @@ def add_habit(name: str, frequency: str, prompt: str, category: str, active: boo
     return page["id"]
 
 
+def delete_habit(name: str) -> bool:
+    """Archive (soft-delete) a habit by name. Returns True if found and archived."""
+    from ritualflow.utils import notion_query_db
+
+    db_id = RITUALFLOW_GENERATED_DB_ID
+    if not db_id:
+        raise RuntimeError("No database ID — set RITUALFLOW_GENERATED_DB_ID in .env.")
+
+    pages = notion_query_db(NOTION_TOKEN, db_id)
+    client = Client(auth=NOTION_TOKEN)
+
+    for page in pages:
+        props = page.get("properties", {})
+        title_parts = props.get("Name", {}).get("title", [])
+        page_name = "".join(p.get("plain_text", "") for p in title_parts)
+        if page_name.lower() == name.lower():
+            client.pages.update(page_id=page["id"], archived=True)
+            return True
+
+    return False
+
+
 def setup_database(parent_page_id: str | None = None) -> str:
     """Create the RitualFlow database. Returns db_id."""
     client = Client(auth=NOTION_TOKEN)
