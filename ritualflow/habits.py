@@ -14,7 +14,6 @@ class Habit:
     prompt: str
     category: str
     active: bool
-    output_page_id: str | None
 
 
 def get_active_habits(frequency: str | None = None) -> list[Habit]:
@@ -51,7 +50,6 @@ def get_active_habits(frequency: str | None = None) -> list[Habit]:
         freq = _get_select(props.get("Frequency", {}))
         prompt = _get_rich_text(props.get("Prompt", {}))
         category = _get_select(props.get("Category", {}))
-        output_page_id = _get_rich_text(props.get("Output Page", {})) or None
 
         habits.append(
             Habit(
@@ -61,7 +59,6 @@ def get_active_habits(frequency: str | None = None) -> list[Habit]:
                 prompt=prompt,
                 category=category,
                 active=True,
-                output_page_id=output_page_id,
             )
         )
 
