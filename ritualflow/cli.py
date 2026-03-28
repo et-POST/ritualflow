@@ -171,7 +171,8 @@ def history(name: str | None, limit: int):
     validate_config()
 
     from ritualflow.habits import get_active_habits
-    from ritualflow.writer import _get_notion_client
+    from ritualflow.utils import notion_list_children
+    from ritualflow.config import NOTION_TOKEN
 
     habits = get_active_habits()
     if not habits:
@@ -184,16 +185,14 @@ def history(name: str | None, limit: int):
             click.echo(f"Habit '{name}' not found.")
             return
 
-    client = _get_notion_client()
-
     for habit in habits:
         click.echo(f"\n[{habit.frequency}] {habit.name}")
         click.echo("-" * 50)
 
         try:
-            children = client.blocks.children.list(block_id=habit.id)
+            children = notion_list_children(NOTION_TOKEN, habit.id)
             pages = [
-                b for b in children.get("results", [])
+                b for b in children
                 if b.get("type") == "child_page"
             ]
         except Exception:
@@ -228,7 +227,9 @@ def status():
     validate_config()
 
     from ritualflow.habits import get_active_habits
-    from ritualflow.writer import page_exists, _get_notion_client
+    from ritualflow.writer import page_exists
+    from ritualflow.utils import notion_list_children
+    from ritualflow.config import NOTION_TOKEN
 
     habits = get_active_habits()
 
@@ -239,14 +240,13 @@ def status():
     click.echo(f"\n{'Name':<25} {'Freq':<10} {'Now?':<10} {'Pages'}")
     click.echo("-" * 60)
 
-    client = _get_notion_client()
     for h in habits:
         done = "YES" if page_exists(h) is not None else "pending"
         # Count child pages under the habit
         total = 0
         try:
-            children = client.blocks.children.list(block_id=h.id)
-            total = sum(1 for b in children.get("results", []) if b.get("type") == "child_page")
+            children = notion_list_children(NOTION_TOKEN, h.id)
+            total = sum(1 for b in children if b.get("type") == "child_page")
         except Exception:
             pass
         click.echo(f"{h.name:<25} {h.frequency:<10} {done:<10} {total}")

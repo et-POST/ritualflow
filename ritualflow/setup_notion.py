@@ -80,7 +80,7 @@ def setup_database(parent_page_id: str | None = None) -> str:
 
     db = client.databases.create(
         parent={"type": "page_id", "page_id": parent_id},
-        title=[{"type": "text", "text": {"content": "RitualFlow - Generated"}}],
+        title=[{"type": "text", "text": {"content": "RitualFlow - Habits"}}],
         icon={"type": "emoji", "emoji": "\U0001f4d6"},
         is_inline=True,
         initial_data_source={
@@ -147,8 +147,8 @@ def setup_stats_block(page_id: str) -> str:
                             "type": "text",
                             "text": {
                                 "content": (
-                                    "Cette semaine : -- g\u00e9n\u00e9r\u00e9es \u00b7 --/-- lues\n"
-                                    "Ce mois : -- g\u00e9n\u00e9r\u00e9es \u00b7 --/-- lues"
+                                    "This week: 0 generated\n"
+                                    "Total: 0 generated"
                                 )
                             },
                         }

@@ -6,6 +6,7 @@ from notion_client import Client
 
 from ritualflow.config import NOTION_TOKEN, RITUALFLOW_OUTPUT_PAGE_ID, RITUALFLOW_STATS_BLOCK_ID
 from ritualflow.habits import Habit
+from ritualflow.utils import notion_list_children
 
 # Notion API hard limit for children blocks per request
 NOTION_BLOCK_LIMIT = 100
@@ -38,12 +39,11 @@ def page_exists(habit: Habit, ref_date: date | None = None) -> str | None:
 
     Returns the page URL or None.
     """
-    client = _get_notion_client()
     display_title = _make_display_title(habit, ref_date)
 
     try:
-        children = client.blocks.children.list(block_id=habit.id)
-        for block in children.get("results", []):
+        children = notion_list_children(NOTION_TOKEN, habit.id)
+        for block in children:
             if block.get("type") == "child_page":
                 if block["child_page"]["title"] == display_title:
                     page_id = block["id"].replace("-", "")

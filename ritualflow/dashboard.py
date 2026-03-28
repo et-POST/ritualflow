@@ -2,17 +2,12 @@
 
 from datetime import date, timedelta
 
-from notion_client import Client
-
 from ritualflow.config import (
     NOTION_TOKEN,
     RITUALFLOW_STATS_BLOCK_ID,
 )
 from ritualflow.habits import get_active_habits
-
-
-def _get_notion_client() -> Client:
-    return Client(auth=NOTION_TOKEN)
+from ritualflow.utils import notion_list_children, notion_update_block
 
 
 def _monday_of_week(d: date) -> date:
@@ -20,20 +15,19 @@ def _monday_of_week(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 
-def _count_child_pages_by_period(client: Client) -> tuple[int, int]:
-    """Count generated child pages for this week and this month.
+def _count_child_pages() -> tuple[int, int]:
+    """Count generated child pages for this week and all time.
 
     Iterates all active habits, lists their child pages, and filters
     by creation date (created_time from the Notion API).
 
-    Returns (week_count, month_count).
+    Returns (week_count, total_count).
     """
     today = date.today()
     monday = _monday_of_week(today)
-    month_start = date(today.year, today.month, 1)
 
     week_count = 0
-    month_count = 0
+    total_count = 0
 
     try:
         habits = get_active_habits()
@@ -42,22 +36,20 @@ def _count_child_pages_by_period(client: Client) -> tuple[int, int]:
 
     for habit in habits:
         try:
-            children = client.blocks.children.list(block_id=habit.id)
-            for block in children.get("results", []):
+            children = notion_list_children(NOTION_TOKEN, habit.id)
+            for block in children:
                 if block.get("type") != "child_page":
                     continue
-                created = block.get("created_time", "")[:10]  # "2026-03-14"
-                if not created:
-                    continue
-                created_date = date.fromisoformat(created)
-                if created_date >= month_start:
-                    month_count += 1
-                if created_date >= monday:
-                    week_count += 1
+                total_count += 1
+                created = block.get("created_time", "")[:10]
+                if created:
+                    created_date = date.fromisoformat(created)
+                    if created_date >= monday:
+                        week_count += 1
         except Exception:
             continue
 
-    return week_count, month_count
+    return week_count, total_count
 
 
 def update_stats() -> bool:
@@ -68,21 +60,22 @@ def update_stats() -> bool:
     if not RITUALFLOW_STATS_BLOCK_ID:
         return False
 
-    client = _get_notion_client()
+    week_total, all_total = _count_child_pages()
 
-    week_total, month_total = _count_child_pages_by_period(client)
-
-    week_line = f"Cette semaine : {week_total} générée{'s' if week_total != 1 else ''}"
-    month_line = f"Ce mois : {month_total} générée{'s' if month_total != 1 else ''}"
-    stats_text = f"{week_line}\n{month_line}"
+    week_line = f"This week: {week_total} generated"
+    total_line = f"Total: {all_total} generated"
+    stats_text = f"{week_line}\n{total_line}"
 
     try:
-        client.blocks.update(
-            block_id=RITUALFLOW_STATS_BLOCK_ID,
-            callout={
-                "rich_text": [{"type": "text", "text": {"content": stats_text}}],
-                "icon": {"type": "emoji", "emoji": "\U0001f4ca"},
-                "color": "blue_background",
+        notion_update_block(
+            NOTION_TOKEN,
+            RITUALFLOW_STATS_BLOCK_ID,
+            {
+                "callout": {
+                    "rich_text": [{"type": "text", "text": {"content": stats_text}}],
+                    "icon": {"type": "emoji", "emoji": "\U0001f4ca"},
+                    "color": "blue_background",
+                },
             },
         )
         print(f"  [dashboard] Stats updated: {stats_text.replace(chr(10), ' | ')}")
