@@ -6,11 +6,9 @@ from notion_client import Client
 
 from ritualflow.config import (
     NOTION_TOKEN,
-    RITUALFLOW_GENERATED_DB_ID,
     RITUALFLOW_STATS_BLOCK_ID,
 )
 from ritualflow.habits import get_active_habits
-from ritualflow.utils import notion_query_db
 
 
 def _get_notion_client() -> Client:
