@@ -160,8 +160,3 @@ def get_template(category: str) -> str | None:
     }
     key = mapping.get(category.lower())
     return TEMPLATES.get(key) if key else None
-
-
-def get_template_by_name(name: str) -> str | None:
-    """Return a template by its direct key name."""
-    return TEMPLATES.get(name)

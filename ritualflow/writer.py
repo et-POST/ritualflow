@@ -1,5 +1,6 @@
 """Write generated content as Notion pages in the Generated database."""
 
+import re
 from datetime import date
 
 from notion_client import Client
@@ -48,8 +49,8 @@ def page_exists(habit: Habit, ref_date: date | None = None) -> str | None:
                 if block["child_page"]["title"] == display_title:
                     page_id = block["id"].replace("-", "")
                     return f"https://www.notion.so/{page_id}"
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [warn] Could not check existing pages for '{habit.name}': {e}")
 
     return None
 
@@ -199,8 +200,9 @@ def _markdown_to_blocks(markdown: str) -> list[dict]:
             continue
 
         # Numbered list
-        if len(stripped) > 2 and stripped[0].isdigit() and stripped[1] in (".", ")"):
-            text = stripped[2:].strip()
+        num_match = re.match(r"^(\d+)[.)]\s+(.*)", stripped)
+        if num_match:
+            text = num_match.group(2)
             blocks.append({
                 "object": "block",
                 "type": "numbered_list_item",
@@ -261,8 +263,6 @@ def _heading_block(text: str, level: int) -> dict:
 
 def _parse_rich_text(text: str) -> list[dict]:
     """Parse inline markdown (**bold**, *italic*, `code`) into Notion rich text."""
-    import re
-
     segments = []
     pattern = re.compile(r"(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)")
     last_end = 0
