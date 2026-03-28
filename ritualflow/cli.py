@@ -164,6 +164,65 @@ def delete(name: str, yes: bool):
 
 
 @main.command()
+@click.argument("name", required=False)
+@click.option("--limit", "-n", default=10, help="Max pages to show per habit.")
+def history(name: str | None, limit: int):
+    """Show generated pages for a habit (or all habits)."""
+    validate_config()
+
+    from ritualflow.habits import get_active_habits
+    from ritualflow.writer import _get_notion_client
+
+    habits = get_active_habits()
+    if not habits:
+        click.echo("No habits found. Run 'ritualflow setup' first.")
+        return
+
+    if name:
+        habits = [h for h in habits if h.name.lower() == name.lower()]
+        if not habits:
+            click.echo(f"Habit '{name}' not found.")
+            return
+
+    client = _get_notion_client()
+
+    for habit in habits:
+        click.echo(f"\n[{habit.frequency}] {habit.name}")
+        click.echo("-" * 50)
+
+        try:
+            children = client.blocks.children.list(block_id=habit.id)
+            pages = [
+                b for b in children.get("results", [])
+                if b.get("type") == "child_page"
+            ]
+        except Exception:
+            click.echo("  (could not list pages)")
+            continue
+
+        if not pages:
+            click.echo("  (no pages yet)")
+            continue
+
+        # Sort by created_time descending (most recent first)
+        pages.sort(key=lambda b: b.get("created_time", ""), reverse=True)
+
+        for page in pages[:limit]:
+            title = page.get("child_page", {}).get("title", "Untitled")
+            created = page.get("created_time", "")[:10]
+            page_id = page["id"].replace("-", "")
+            url = f"https://www.notion.so/{page_id}"
+            click.echo(f"  {created}  {title}")
+            click.echo(f"           {url}")
+
+        remaining = len(pages) - limit
+        if remaining > 0:
+            click.echo(f"  ... and {remaining} more (use -n {len(pages)} to see all)")
+
+    click.echo("")
+
+
+@main.command()
 def status():
     """Show the current state of all habits."""
     validate_config()
