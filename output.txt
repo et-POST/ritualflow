@@ -1,4 +1,0 @@
-Total in DB: 3
-'Tech Digest' | weekly | active: False
-'Decouverte Paris' | monthly | active: False
-'Fun Fact du Jour' | daily | active: True
