@@ -1,6 +1,7 @@
 """Read habit definitions from Notion database."""
 
 from dataclasses import dataclass
+import click
 from ritualflow.config import NOTION_TOKEN, RITUALFLOW_GENERATED_DB_ID
 from ritualflow.utils import notion_query_db
 
@@ -29,7 +30,19 @@ def get_active_habits(frequency: str | None = None) -> list[Habit]:
     else:
         notion_filter = {"and": filter_conditions}
 
-    pages = notion_query_db(NOTION_TOKEN, RITUALFLOW_GENERATED_DB_ID, filter=notion_filter)
+    if not RITUALFLOW_GENERATED_DB_ID:
+        raise click.ClickException(
+            "RITUALFLOW_GENERATED_DB_ID not set. Run 'ritualflow setup' and update your .env."
+        )
+
+    try:
+        pages = notion_query_db(NOTION_TOKEN, RITUALFLOW_GENERATED_DB_ID, filter=notion_filter)
+    except Exception:
+        raise click.ClickException(
+            f"Could not access database {RITUALFLOW_GENERATED_DB_ID}.\n"
+            "  Did you update RITUALFLOW_GENERATED_DB_ID in .env after running setup?\n"
+            "  Make sure the database is shared with your Notion integration."
+        )
 
     habits = []
     for page in pages:
