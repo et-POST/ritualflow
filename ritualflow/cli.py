@@ -12,6 +12,28 @@ if sys.platform == "win32":
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 
+def _update_env(key: str, value: str):
+    """Update or add a key=value in the .env file."""
+    from pathlib import Path
+
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.exists():
+        env_path.write_text(f"{key}={value}\n", encoding="utf-8")
+        return
+
+    lines = env_path.read_text(encoding="utf-8").splitlines()
+    found = False
+    for i, line in enumerate(lines):
+        if line.startswith(f"{key}="):
+            lines[i] = f"{key}={value}"
+            found = True
+            break
+    if not found:
+        lines.append(f"{key}={value}")
+
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 @click.group()
 def main():
     """RitualFlow - AI-powered habit automation for Notion."""
@@ -88,17 +110,16 @@ def setup(parent_page_id: str | None):
     click.echo("Creating stats callout block on main page...")
     block_id = setup_stats_block(pid)
 
+    # Auto-update .env with the new IDs
+    _update_env("RITUALFLOW_GENERATED_DB_ID", db_id)
+    _update_env("RITUALFLOW_STATS_BLOCK_ID", block_id)
+
     click.echo("\n" + "=" * 60)
-    click.echo("Setup complete! Add these lines to your .env:")
+    click.echo("Setup complete! .env updated automatically:")
     click.echo("=" * 60)
     click.echo(f"RITUALFLOW_GENERATED_DB_ID={db_id}")
     click.echo(f"RITUALFLOW_STATS_BLOCK_ID={block_id}")
     click.echo("=" * 60)
-    click.echo("\nThen create 4 views in the Generated DB in Notion:")
-    click.echo("  - Daily   : filter Frequency = daily,   group by Habit")
-    click.echo("  - Weekly  : filter Frequency = weekly,  group by Habit")
-    click.echo("  - Monthly : filter Frequency = monthly, group by Habit")
-    click.echo("  - A lire  : filter Lu = false, sort by Date desc")
 
 
 
