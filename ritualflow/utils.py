@@ -7,6 +7,7 @@ import httpx
 
 NOTION_API_BASE = "https://api.notion.com/v1"
 NOTION_VERSION = "2022-06-28"
+NOTION_TIMEOUT = 30  # seconds
 
 
 def notion_query_db(token: str, database_id: str, filter: dict | None = None) -> list[dict]:
@@ -26,6 +27,7 @@ def notion_query_db(token: str, database_id: str, filter: dict | None = None) ->
             "Notion-Version": NOTION_VERSION,
         },
         json=body,
+        timeout=NOTION_TIMEOUT,
     )
     response.raise_for_status()
     return response.json().get("results", [])
@@ -49,7 +51,7 @@ def notion_list_children(token: str, block_id: str) -> list[dict]:
     url = f"{NOTION_API_BASE}/blocks/{block_id}/children?page_size=100"
 
     while url:
-        response = httpx.get(url, headers=_notion_headers(token))
+        response = httpx.get(url, headers=_notion_headers(token), timeout=NOTION_TIMEOUT)
         response.raise_for_status()
         data = response.json()
         all_blocks.extend(data.get("results", []))
@@ -70,6 +72,7 @@ def notion_update_block(token: str, block_id: str, block_data: dict) -> dict:
         f"{NOTION_API_BASE}/blocks/{block_id}",
         headers=_notion_headers(token),
         json=block_data,
+        timeout=NOTION_TIMEOUT,
     )
     response.raise_for_status()
     return response.json()
