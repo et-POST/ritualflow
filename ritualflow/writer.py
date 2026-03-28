@@ -4,7 +4,7 @@ from datetime import date
 
 from notion_client import Client
 
-from ritualflow.config import NOTION_TOKEN
+from ritualflow.config import NOTION_TOKEN, RITUALFLOW_OUTPUT_PAGE_ID, RITUALFLOW_STATS_BLOCK_ID
 from ritualflow.habits import Habit
 
 # Notion API hard limit for children blocks per request
@@ -81,7 +81,39 @@ def create_page(habit: Habit, content: str, ref_date: date | None = None) -> str
         client.blocks.children.append(block_id=page_id, children=batch)
         remaining = remaining[NOTION_BLOCK_LIMIT:]
 
+    # Add a link to the generated page on the main RitualFlow page
+    _link_on_main_page(client, page_id)
+
     return page["url"]
+
+
+def _link_on_main_page(client: Client, page_id: str):
+    """Insert a link_to_page block right after the stats callout on the main page.
+
+    Newest links appear at the top of the list.
+    """
+    if not RITUALFLOW_OUTPUT_PAGE_ID:
+        return
+    try:
+        kwargs = {
+            "block_id": RITUALFLOW_OUTPUT_PAGE_ID,
+            "children": [
+                {
+                    "object": "block",
+                    "type": "link_to_page",
+                    "link_to_page": {
+                        "type": "page_id",
+                        "page_id": page_id,
+                    },
+                }
+            ],
+        }
+        # Insert right after the stats callout so newest links are on top
+        if RITUALFLOW_STATS_BLOCK_ID:
+            kwargs["after"] = RITUALFLOW_STATS_BLOCK_ID
+        client.blocks.children.append(**kwargs)
+    except Exception as e:
+        print(f"  [warn] Could not add link to main page: {e}")
 
 
 def _category_emoji(category: str) -> str:
