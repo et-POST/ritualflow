@@ -99,13 +99,25 @@ def setup(parent_page_id: str | None):
     """Create the RitualFlow databases and stats block in Notion."""
     validate_config()
 
-    from ritualflow.config import RITUALFLOW_OUTPUT_PAGE_ID
+    from ritualflow.config import RITUALFLOW_OUTPUT_PAGE_ID, RITUALFLOW_GENERATED_DB_ID, RITUALFLOW_STATS_BLOCK_ID
     from ritualflow.setup_notion import setup_database, setup_stats_block
 
     pid = parent_page_id or RITUALFLOW_OUTPUT_PAGE_ID
     if not pid:
         click.echo("Error: provide --parent-page-id or set RITUALFLOW_OUTPUT_PAGE_ID in .env")
         return
+
+    if RITUALFLOW_GENERATED_DB_ID:
+        from ritualflow.utils import notion_query_db
+        from ritualflow.config import NOTION_TOKEN
+        try:
+            notion_query_db(NOTION_TOKEN, RITUALFLOW_GENERATED_DB_ID)
+            click.echo(f"Database already exists and is accessible: {RITUALFLOW_GENERATED_DB_ID}")
+            click.confirm("Running setup again will create duplicates. Continue?", abort=True)
+        except (click.Abort, SystemExit):
+            raise
+        except Exception:
+            click.echo("Existing database is not accessible — proceeding with fresh setup.")
 
     click.echo("Creating Generated database...")
     db_id = setup_database(pid)
