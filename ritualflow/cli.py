@@ -129,9 +129,7 @@ def status():
     validate_config()
 
     from ritualflow.habits import get_active_habits
-    from ritualflow.writer import page_exists
-    from notion_client import Client
-    from ritualflow.config import NOTION_TOKEN, RITUALFLOW_GENERATED_DB_ID
+    from ritualflow.writer import page_exists, _get_notion_client
 
     habits = get_active_habits()
 
@@ -139,35 +137,20 @@ def status():
         click.echo("No habits found. Run 'ritualflow setup' first.")
         return
 
-    # Try to get read counts from Generated DB
-    read_counts: dict[str, int] = {}
-    total_counts: dict[str, int] = {}
-    if RITUALFLOW_GENERATED_DB_ID:
-        try:
-            client = Client(auth=NOTION_TOKEN)
-            results = client.databases.query(
-                database_id=RITUALFLOW_GENERATED_DB_ID,
-            )
-            for page in results.get("results", []):
-                props = page.get("properties", {})
-                habit_sel = props.get("Habit", {}).get("select")
-                habit_name = habit_sel["name"] if habit_sel else ""
-                is_read = props.get("Lu", {}).get("checkbox", False)
-                total_counts[habit_name] = total_counts.get(habit_name, 0) + 1
-                if is_read:
-                    read_counts[habit_name] = read_counts.get(habit_name, 0) + 1
-        except Exception:
-            pass
+    click.echo(f"\n{'Name':<25} {'Freq':<10} {'Now?':<10} {'Pages'}")
+    click.echo("-" * 60)
 
-    click.echo(f"\n{'Name':<25} {'Freq':<10} {'Now?':<10} {'Lu / Total'}")
-    click.echo("-" * 65)
-
+    client = _get_notion_client()
     for h in habits:
         done = "YES" if page_exists(h) is not None else "pending"
-        total = total_counts.get(h.name, 0)
-        read  = read_counts.get(h.name, 0)
-        lu_str = f"{read}/{total}" if total > 0 else "--"
-        click.echo(f"{h.name:<25} {h.frequency:<10} {done:<10} {lu_str}")
+        # Count child pages under the habit
+        total = 0
+        try:
+            children = client.blocks.children.list(block_id=h.id)
+            total = sum(1 for b in children.get("results", []) if b.get("type") == "child_page")
+        except Exception:
+            pass
+        click.echo(f"{h.name:<25} {h.frequency:<10} {done:<10} {total}")
 
     click.echo("")
 

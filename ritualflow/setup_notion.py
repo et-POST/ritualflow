@@ -84,8 +84,6 @@ def setup_database(parent_page_id: str | None = None) -> str:
                         ]
                     }
                 },
-                "Date": {"date": {}},
-                "Lu": {"checkbox": {}},
             }
         },
     )
