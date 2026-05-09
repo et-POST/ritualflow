@@ -1,9 +1,6 @@
 name: RitualFlow — Habit Automation
 
 on:
-  schedule:
-    # Daily at 8:00 AM UTC (adjust to your timezone)
-    - cron: '0 8 * * *'
   workflow_dispatch:
     inputs:
       frequency:
